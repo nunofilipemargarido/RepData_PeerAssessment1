@@ -2,24 +2,161 @@
 title: "Reproducible Research: Peer Assessment 1"
 output: 
   html_document:
-    keep_md: true
+    keep_md: yes
 ---
 
 
+
+First we prepare the environment to proceed with analysis.  
+we must:   
+1. Provide plotting libraries for graph reproduction   
+2. And Set Environment variables   
+
+```{r setoptions, echo=TRUE,results='hide', message=FALSE, warning=FALSE}
+library('knitr')
+library('xtable')
+library('ggplot2')
+library('lattice')
+##Set the global options for defaults in document processing
+opts_chunk$set(echo=FALSE,results="hide" , message=FALSE, warning=FALSE);
+Sys.setlocale("LC_TIME", "English")
+
+```
+
+
+
 ## Loading and preprocessing the data
+
+In this section we only load data
+```{r datapreproced, echo=TRUE}
+activity<-read.csv("./activity/activity.csv")
+#summary(activity)
+#head(activity)
+```
+
 
 
 
 ## What is mean total number of steps taken per day?
 
+First we use the Aggregate Framework to grou and calculate the mean steps by date, 
+note  that there are other packages that provides 
+the same functionality like for example  dplyr
+
+
+```{r computeMean, echo=TRUE,results='asis'}
+
+stepsByDay<-aggregate(activity$steps,by=list(day=activity$date),FUN=mean)
+
+#The table using xtable
+tab <- xtable(stepsByDay)
+print(tab, type="html")
+
+```
+After the table we calculate the histogram, we see that 
+there is more frequent to take 40 steps by day
+
+```{r computeMean2, echo=TRUE,results='asis'}
+
+stepsByDay$dday<-as.Date(stepsByDay$day,format="%Y-%m-%d")
+hist(stepsByDay$x,xlab = 'Number of Steps',main = 'Frequency of Steps')
+
+```
+
+
+
+```{r computeMean4, echo=TRUE,results='hide'}
+
+stepsMean<-mean(stepsByDay$x,na.rm = TRUE)
+stepsMedian<-median(stepsByDay$x,na.rm = TRUE)
+
+```
+###we get the mean `r stepsMean` and Median is `r stepsMedian`  
+they are very close, note the histogram is almost symmetric.
+
+No necessary but we plot with the linear regression.
+
+```{r computeMean3, echo=TRUE,results='asis'}
+
+linearModel<-lm( x~dday, data=stepsByDay)
+plot(stepsByDay$dday,stepsByDay$x,xlab='Date',ylab = 'Steps',main = 'Steps  by Day',col='blue')
+abline(linearModel,col='red')
+
+```
 
 
 ## What is the average daily activity pattern?
+
+We use the agrregate function to group steps by interval. 
+And we plot the time series, with this plot is dificult 
+to se a pattern
+
+```{r averageDaily,echo=TRUE}
+stepsByInterval<-aggregate(activity$steps,by=list(interval=activity$interval),FUN=mean, na.action=na.pass, na.rm=TRUE)
+plot(stepsByInterval$interval,stepsByInterval$x,xlab='Interval of Minutes',ylab = 'Steps Taken',main = 'Average daily activity pattern',col='blue',type="l")
+
+```
+With the smooth functio in ggplot we can see more a pattern.
+
+```{r averageDaily2,echo=TRUE}
+qplot(stepsByInterval$interval,stepsByInterval$x, geom='smooth', span =0.5)
+
+```
+
+
 
 
 
 ## Imputing missing values
 
+The next step sum all Missing values and use the mean steps by interval to replace Missing Values. 
 
+```{r missingValues,echo=TRUE}
+
+sumSteps<-sum(is.na(activity$steps))
+activity$steps.na <- activity$steps 
+activity2<-data.frame(activity)
+for(i in 1:nrow(activity2)){
+  
+  if(is.na(activity2[i,"steps"]))
+  {
+    activity2[i,"steps"] <-  stepsByInterval[stepsByInterval["interval"]==activity2[i,"interval"],"x"]
+  } 
+}
+```
+####The total missing values is `r sumSteps`.
+
+```{r missingValues2, echo=TRUE}
+stepsByDay2<-aggregate(activity2$steps,by=list(day=activity2$date),FUN=mean)
+stepsByDay2$dday<-as.Date(stepsByDay2$day,format="%Y-%m-%d")
+hist(stepsByDay2$x,xlab = 'Number of Steps',main = 'Frequency of Steps')
+stepsMean2<-mean(stepsByDay2$x)
+stepsMedian2<-median(stepsByDay2$x)
+
+```
+###we get the mean `r stepsMean2` and Median is `r stepsMedian2`  
+this causes to move close the median and mean but nothing .
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+There exists some differences between wekdays and weekends. 
+we have use a second graph with spline to smooth the data to see better the diferences.
+```{r differeceActivity, echo=TRUE,results='asis'}
+
+
+activity2$wdays <- weekdays(as.Date(activity2$date,format="%Y-%m-%d"))
+wkdays <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+activity2$fWeekdays<- factor((activity2$wdays %in% wkdays),levels=c(FALSE, TRUE), labels=c('weekend', 'weekday')) 
+stepsByWeekday<-aggregate(activity2$steps,by=list(interval=activity2$interval,weekday=activity2$fWeekdays),FUN=mean)
+
+library(lattice)
+xyplot(x~interval | factor(weekday), data=stepsByWeekday, pch=19,
+                main="Differences between weekdays and weekends in steps by time interval ",  ylab="Steps",layout=c(1,2),type=c("l"))
+
+xyplot(x~interval | factor(weekday), data=stepsByWeekday, pch=19,
+                main="Differences between weekdays and weekends in steps by time interval ",  ylab="Steps",layout=c(1,2),type=c("spline"))
+
+```
+
+
+
